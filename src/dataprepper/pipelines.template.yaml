@@ -1,0 +1,79 @@
+# Copyright OpenSearch Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+otlp-pipeline:
+  delay: 10
+  source:
+    otlp:
+      ssl: false
+  route:
+    - logs: "getEventType() == \"LOG\""
+    - traces: "getEventType() == \"TRACE\""
+  sink:
+    - pipeline:
+        name: "otel-logs-pipeline"
+        routes:
+          - "logs"
+    - pipeline:
+        name: "otel-traces-pipeline"
+        routes:
+          - "traces"
+  
+otel-logs-pipeline:
+  workers: 5
+  delay: 10
+  source:
+    pipeline:
+      name: "otlp-pipeline"
+  buffer:
+    bounded_blocking:
+  sink:
+    - opensearch:
+        hosts: OPENSEARCH_HOSTS
+        username: OPENSEARCH_USER
+        password: OPENSEARCH_PASSWORD
+        insecure: true
+        index_type: log-analytics-plain
+
+otel-traces-pipeline:
+  delay: "100"
+  source:
+    pipeline:
+      name: "otlp-pipeline"
+  sink:
+    - pipeline:
+        name: "traces-raw-pipeline"
+    - pipeline:
+        name: "service-map-pipeline"
+
+traces-raw-pipeline:
+  source:
+    pipeline:
+      name: "otel-traces-pipeline"
+  processor:
+      # workaround for https://github.com/opensearch-project/data-prepper/issues/5616
+    - delete_entries:
+        with_keys: ["attributes/upstream_cluster", "attributes/user_agent", "attributes/app/ads/contextKeys"]
+    - otel_trace_raw:
+  sink:
+    - opensearch:
+        hosts: OPENSEARCH_HOSTS
+        username: OPENSEARCH_USER
+        password: OPENSEARCH_PASSWORD
+        insecure: true
+        index_type: trace-analytics-plain-raw
+
+service-map-pipeline:
+  delay: "100"
+  source:
+    pipeline:
+      name: "otel-traces-pipeline"
+  processor:
+    - service_map_stateful:
+  sink:
+    - opensearch:
+        hosts: OPENSEARCH_HOSTS
+        username: OPENSEARCH_USER
+        password: OPENSEARCH_PASSWORD
+        insecure: true
+        index_type: trace-analytics-service-map

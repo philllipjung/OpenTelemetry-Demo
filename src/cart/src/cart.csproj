@@ -36,6 +36,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Grpc.Net.Client" Version="2.76.0" />
     <Protobuf Include="$(ProtosDir)\**\*.proto" GrpcServices="Both" />
   </ItemGroup>
 </Project>
